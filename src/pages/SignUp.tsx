@@ -57,16 +57,16 @@ const SignUp = () => {
 
       if (authError) throw authError;
 
-      // 2️⃣ Add user profile to `profiles` table
-      const { error: profileError } = await supabase.from("profiles").insert([
-        {
-          id: authData.user?.id,
-          name:name, // or add a separate name input
-          role: "citizen",
-        },
-      ]);
+      // // 2️⃣ Add user profile to `profiles` table
+      // const { error: profileError } = await supabase.from("profiles").insert([
+      //   {
+      //     id: authData.user?.id,
+      //     name: name, // <-- from your new input
+      //     role: "citizen",
+      //   },
+      // ]);
 
-      if (profileError) throw profileError;
+      // if (profileError) throw profileError; // <- keep this line as is
 
       toast({
         title: "Success",
@@ -109,7 +109,7 @@ const SignUp = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignUp} className="space-y-4">
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="name"> Name</Label>
                 <Input
                   id="name"
@@ -120,7 +120,7 @@ const SignUp = () => {
                   required
                   className="transition-all duration-300 focus:shadow-glow"
                 />
-              </div>
+              </div> */}
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
