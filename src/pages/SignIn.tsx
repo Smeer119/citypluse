@@ -2,10 +2,17 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { AlertTriangle, Eye, EyeOff, Mail } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 const SignIn = () => {
   const [email, setEmail] = useState("");
@@ -15,25 +22,80 @@ const SignIn = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
-      // TODO: Implement Supabase auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user?.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      if (profile.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/dashboard");
+      }
+
       toast({
         title: "Success",
         description: "Signed in successfully!",
       });
-      navigate("/dashboard");
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to sign in. Please check your credentials.",
+        description: error.message || "Failed to sign in. Check credentials.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!resetEmail) {
+      toast({
+        title: "Error",
+        description: "Please enter your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail);
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Password reset email sent! Check your inbox.",
+      });
+      setShowResetModal(false);
+      setResetEmail("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send reset email.",
+        variant: "destructive",
+      });
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -45,7 +107,9 @@ const SignIn = () => {
             <AlertTriangle className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">Welcome back</h1>
-          <p className="text-muted-foreground">Sign in to your CityPulse account</p>
+          <p className="text-muted-foreground">
+            Sign in to your CityPulse account
+          </p>
         </div>
 
         <Card className="border-border/50 shadow-elegant">
@@ -89,12 +153,16 @@ const SignIn = () => {
                     className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
+                </div>
+                <div className="text-right mt-1">
+                  <span
+                    className="text-sm text-primary hover:underline cursor-pointer"
+                    onClick={() => setShowResetModal(true)}
+                  >
+                    Forgot Password?
+                  </span>
                 </div>
               </div>
 
@@ -130,6 +198,34 @@ const SignIn = () => {
           </Link>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-full max-w-sm p-6 space-y-4 shadow-lg">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Mail className="w-5 h-5" /> Reset Password
+            </h2>
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowResetModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handlePasswordReset} disabled={resetLoading}>
+                {resetLoading ? "Sending..." : "Send Email"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

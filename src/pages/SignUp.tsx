@@ -2,13 +2,21 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,7 +27,7 @@ const SignUp = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast({
         title: "Error",
@@ -39,18 +47,39 @@ const SignUp = () => {
     }
 
     setLoading(true);
-    
+
     try {
-      // TODO: Implement Supabase auth
+      // 1️⃣ Sign up user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) throw authError;
+
+      // 2️⃣ Add user profile to `profiles` table
+      const { error: profileError } = await supabase.from("profiles").insert([
+        {
+          id: authData.user?.id,
+          name:name, // or add a separate name input
+          role: "citizen",
+        },
+      ]);
+
+      if (profileError) throw profileError;
+
       toast({
         title: "Success",
-        description: "Account created successfully! Please check your email to verify your account.",
+        description:
+          "Account created successfully! Please check your email to verify your account.",
       });
+
       navigate("/signin");
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create account. Please try again.",
+        description:
+          error.message || "Failed to create account. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -66,7 +95,9 @@ const SignUp = () => {
             <AlertTriangle className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">Join CityPulse</h1>
-          <p className="text-muted-foreground">Create your account to get started</p>
+          <p className="text-muted-foreground">
+            Create your account to get started
+          </p>
         </div>
 
         <Card className="border-border/50 shadow-elegant">
@@ -78,6 +109,19 @@ const SignUp = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name"> Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="transition-all duration-300 focus:shadow-glow"
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
