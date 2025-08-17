@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Home, BarChart3, FileText, TrendingUp, AlertTriangle } from "lucide-react";
+import { Home, BarChart3, FileText, TrendingUp, AlertTriangle, LogIn, UserPlus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 const Navigation = () => {
@@ -50,6 +50,31 @@ const Navigation = () => {
                 </Button>
               );
             })}
+            
+            <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center space-x-2 transition-all duration-300 hover:bg-secondary"
+                asChild
+              >
+                <Link to="/signin">
+                  <LogIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">Sign In</span>
+                </Link>
+              </Button>
+              
+              <Button
+                size="sm"
+                className="flex items-center space-x-2 bg-gradient-hero hover:shadow-glow transition-all duration-300"
+                asChild
+              >
+                <Link to="/signup">
+                  <UserPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Sign Up</span>
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
