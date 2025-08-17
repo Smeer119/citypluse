@@ -9,6 +9,9 @@ import MapView from "@/components/MapView";
 import MobileFilterDrawer from "@/components/MobileFilterDrawer";
 import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu } from "lucide-react";
 
+import { supabase } from "@/lib/supabaseClient"; // Make sure this points to your supabase client
+import { useEffect } from "react"; // If not already imported
+
 const Dashboard = () => {
   const [selectedIssue, setSelectedIssue] = useState<any>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
