@@ -53,6 +53,9 @@ const SignUp = () => {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: "http://localhost:8080/dashboard", // ← Must match Supabase config
+        },
       });
 
       if (authError) throw authError;
