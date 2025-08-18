@@ -18,7 +18,9 @@ export default function ProfileComplete() {
   const [locationText, setLocationText] = useState("");
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
+  const [locationLoading, setLocationLoading] = useState(false);
 
+  // Load user profile
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -28,7 +30,11 @@ export default function ProfileComplete() {
         navigate("/signin");
         return;
       }
-      const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
       if (profile) {
         setRole((profile.role as any) === "admin" ? "admin" : "user");
         setName(profile.name || "");
@@ -44,6 +50,54 @@ export default function ProfileComplete() {
     load();
   }, [navigate]);
 
+  // Autofill current location using OpenStreetMap
+  const autofillLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    setLocationLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setLat(latitude.toString());
+        setLng(longitude.toString());
+
+        if (accuracy > 50) {
+          alert(
+            `Location accuracy is low (${Math.round(accuracy)} meters). For exact address, please type manually.`
+          );
+        }
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await response.json();
+
+          if (data && data.display_name) {
+            setLocationText(data.display_name);
+          } else {
+            setLocationText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          }
+        } catch (err) {
+          console.error("Error fetching location:", err);
+          setLocationText(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (err) => {
+        alert(`Failed to get location: ${err.message}`);
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
+  // Save profile
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -53,44 +107,27 @@ export default function ProfileComplete() {
       setSaving(false);
       return;
     }
+
     const updates: any = {
       name: name || null,
       phone: phone || null,
-      avatar_url: avatarUrl || null,
-      role, // expects enum or text with values 'user' or 'admin'
+      avatar_url: avatarUrl || null, // Save the image link here
+      role,
       organization_name: role === "admin" ? organizationName || null : null,
       location_text: locationText || null,
       latitude: lat ? parseFloat(lat) : null,
       longitude: lng ? parseFloat(lng) : null,
       is_complete: true,
     };
+
     const { error } = await supabase.from("profiles").update(updates).eq("id", userId);
     setSaving(false);
     if (error) {
       alert(`Failed to save profile: ${error.message}`);
       return;
     }
-    navigate("/dashboard");
-  };
 
-  const autofillLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by this browser.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setLat(latitude.toString());
-        setLng(longitude.toString());
-        // Best-effort reverse geocoding could be added via external API; for now, just set coords
-        setLocationText(`Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)}`);
-      },
-      (err) => {
-        alert(`Failed to get location: ${err.message}`);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    navigate("/dashboard");
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -104,6 +141,7 @@ export default function ProfileComplete() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSave} className="space-y-4">
+            {/* Role */}
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <select
@@ -117,21 +155,28 @@ export default function ProfileComplete() {
               </select>
             </div>
 
+            {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
             </div>
 
+            {/* Phone */}
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +9190..." />
             </div>
 
+            {/* Avatar URL */}
             <div className="space-y-2">
               <Label htmlFor="avatar">Avatar URL</Label>
-              <Input id="avatar" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." />
+              <Input id="avatar" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://example.com/avatar.png" />
+              {avatarUrl && (
+                <img src={avatarUrl} alt="Avatar" className="w-24 h-24 rounded-full mt-2 object-cover" />
+              )}
             </div>
 
+            {/* Organization */}
             {role === "admin" && (
               <div className="space-y-2">
                 <Label htmlFor="org">Organization Name</Label>
@@ -139,14 +184,22 @@ export default function ProfileComplete() {
               </div>
             )}
 
+            {/* Location */}
             <div className="space-y-2">
               <Label htmlFor="location_text">Location</Label>
-              <Input id="location_text" value={locationText} onChange={(e) => setLocationText(e.target.value)} placeholder="City, Area or Address" />
+              <Input 
+                id="location_text" 
+                value={locationText} 
+                onChange={(e) => setLocationText(e.target.value)} 
+                placeholder="City, Area or Address" 
+              />
               <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="Latitude" value={lat} onChange={(e) => setLat(e.target.value)} />
-                <Input placeholder="Longitude" value={lng} onChange={(e) => setLng(e.target.value)} />
+                <Input placeholder="Latitude" value={lat} readOnly />
+                <Input placeholder="Longitude" value={lng} readOnly />
               </div>
-              <Button type="button" variant="outline" onClick={autofillLocation}>Autofill Location</Button>
+              <Button type="button" variant="outline" onClick={autofillLocation} disabled={locationLoading}>
+                {locationLoading ? "Getting location..." : "Autofill Location"}
+              </Button>
             </div>
 
             <Button type="submit" disabled={saving} className="w-full">
