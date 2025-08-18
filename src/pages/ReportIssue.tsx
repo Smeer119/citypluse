@@ -1,10 +1,22 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Navigation from "@/components/Navigation";
 import { FileText, MapPin, Camera, Send, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -14,17 +26,20 @@ import { Link, useNavigate } from "react-router-dom";
 const ReportIssue = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     title: "",
     description: "",
     category: "",
     location: "",
     priority: "",
     contactInfo: "",
+    photos: [],
   });
+  const [showCamera, setShowCamera] = useState(false);
 
   const canReport = role === "user"; // Only 'user' can report
 
@@ -37,7 +52,11 @@ const ReportIssue = () => {
         navigate("/signin");
         return;
       }
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", uid)
+        .maybeSingle();
       setRole(profile?.role || "user");
       setLoadingRole(false);
     };
@@ -56,7 +75,55 @@ const ReportIssue = () => {
   ];
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  // Start Camera
+  const startCamera = async () => {
+    setShowCamera(true);
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch (err) {
+        toast({ title: "Camera Error", description: "Cannot access camera.", variant: "destructive" });
+      }
+    }
+  };
+
+  // Capture Photo
+  const capturePhoto = async () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const fileName = `uploads/${Date.now()}.jpg`;
+
+      try {
+        // Upload to Supabase
+        const { error: uploadError } = await supabase.storage
+          .from("photos")
+          .upload(fileName, blob, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data } = supabase.storage.from("photos").getPublicUrl(fileName);
+
+        setFormData((prev: any) => ({
+          ...prev,
+          photos: [...prev.photos, data.publicUrl],
+        }));
+
+        toast({ title: "Photo Captured", description: "Photo added successfully" });
+      } catch (err: any) {
+        toast({ title: "Upload Error", description: err.message, variant: "destructive" });
+      }
+    }, "image/jpeg");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,8 +144,11 @@ const ReportIssue = () => {
       const uid = userData.user?.id;
       if (!uid) throw new Error("Not authenticated");
 
-      // optional: fetch reporter name
-      const { data: profile } = await supabase.from("profiles").select("name").eq("id", uid).maybeSingle();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", uid)
+        .maybeSingle();
 
       const payload: any = {
         title: formData.title,
@@ -90,6 +160,7 @@ const ReportIssue = () => {
         reporter_id: uid,
         reporter_name: profile?.name || null,
         status: "open",
+        photos: formData.photos || [],
       };
 
       const { error } = await supabase.from("issues").insert(payload);
@@ -100,11 +171,22 @@ const ReportIssue = () => {
         description: "Your report has been submitted and will be reviewed shortly.",
       });
 
-      // Reset and go to dashboard
-      setFormData({ title: "", description: "", category: "", location: "", priority: "", contactInfo: "" });
+      setFormData({
+        title: "",
+        description: "",
+        category: "",
+        location: "",
+        priority: "",
+        contactInfo: "",
+        photos: [],
+      });
       navigate("/dashboard");
     } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to submit your report.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit your report.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -122,7 +204,6 @@ const ReportIssue = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8 text-center">
@@ -131,7 +212,7 @@ const ReportIssue = () => {
           </div>
           <h1 className="text-4xl font-bold text-foreground mb-2">Report a Civic Issue</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Help improve your community by reporting issues that need attention. 
+            Help improve your community by reporting issues that need attention.
             Your reports are automatically prioritized using AI analysis.
           </p>
         </div>
@@ -166,7 +247,6 @@ const ReportIssue = () => {
                       value={formData.title}
                       onChange={(e) => handleInputChange("title", e.target.value)}
                       required
-                      className="transition-all duration-300 focus:shadow-glow"
                       disabled={!canReport}
                     />
                   </div>
@@ -175,7 +255,11 @@ const ReportIssue = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="category">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)} disabled={!canReport}>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => handleInputChange("category", value)}
+                        disabled={!canReport}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
@@ -188,10 +272,13 @@ const ReportIssue = () => {
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div className="space-y-2">
                       <Label htmlFor="priority">Perceived Priority</Label>
-                      <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)} disabled={!canReport}>
+                      <Select
+                        value={formData.priority}
+                        onValueChange={(value) => handleInputChange("priority", value)}
+                        disabled={!canReport}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="How urgent is this?" />
                         </SelectTrigger>
@@ -227,10 +314,9 @@ const ReportIssue = () => {
                     <Label htmlFor="description">Detailed Description *</Label>
                     <Textarea
                       id="description"
-                      placeholder="Provide detailed information about the issue, including when you noticed it, how it affects the community, and any safety concerns..."
+                      placeholder="Provide detailed information about the issue..."
                       value={formData.description}
                       onChange={(e) => handleInputChange("description", e.target.value)}
-                      className="min-h-32 resize-none"
                       required
                       disabled={!canReport}
                     />
@@ -246,40 +332,103 @@ const ReportIssue = () => {
                       onChange={(e) => handleInputChange("contactInfo", e.target.value)}
                       disabled={!canReport}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      We'll only use this to contact you about your report. You can also report anonymously.
-                    </p>
                   </div>
 
-                  {/* Photo Upload Placeholder */}
+                  {/* Photos */}
                   <div className="space-y-2">
-                    <Label>Add Photos (Coming Soon)</Label>
-                    <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                      <Camera className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Photo upload will be available once Supabase storage is connected
-                      </p>
+                    <Label>Add Photos</Label>
+
+                    {/* File Upload & Camera */}
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={async (e) => {
+                          const files = e.target.files;
+                          if (!files) return;
+
+                          for (let i = 0; i < files.length; i++) {
+                            const file = files[i];
+                            const filePath = `uploads/${Date.now()}-${file.name}`;
+                            try {
+                              await supabase.storage.from("photos").upload(filePath, file, { upsert: true });
+                              const { data } = supabase.storage.from("photos").getPublicUrl(filePath);
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                photos: [...prev.photos, data.publicUrl],
+                              }));
+                            } catch (err: any) {
+                              toast({ title: "Upload Error", description: err.message, variant: "destructive" });
+                            }
+                          }
+                        }}
+                        className="border-2 border-dashed border-border rounded-lg p-4 w-full cursor-pointer"
+                      />
+
+                      <Button type="button" onClick={startCamera} disabled={!canReport}>
+                        <Camera className="w-4 h-4 mr-2" /> Capture
+                      </Button>
+                    </div>
+
+                    {showCamera && (
+                      <div className="mt-2 relative">
+                        <video ref={videoRef} autoPlay className="w-full rounded-lg" />
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            onClick={async () => {
+                              await capturePhoto();
+                              const stream = videoRef.current?.srcObject as MediaStream;
+                              stream?.getTracks().forEach((track) => track.stop());
+                              setShowCamera(false);
+                            }}
+                          >
+                            Capture Photo
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              const stream = videoRef.current?.srcObject as MediaStream;
+                              stream?.getTracks().forEach((track) => track.stop());
+                              setShowCamera(false);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.photos.map((url: string, idx: number) => (
+                        <div key={idx} className="relative w-24 h-24">
+                          <img src={url} alt={`Issue ${idx}`} className="w-full h-full object-cover rounded" />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="absolute top-0 right-0 w-6 h-6 p-0 rounded-full flex items-center justify-center"
+                            onClick={() =>
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                photos: prev.photos.filter((_, i: number) => i !== idx),
+                              }))
+                            }
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Submit Button */}
-                  <Button 
-                    type="submit" 
-                    size="lg" 
-                    className="w-full bg-gradient-hero hover:opacity-90 text-white shadow-glow"
+                  {/* Submit */}
+                  <Button
+                    type="submit"
+                    size="lg"
+                    className="w-full bg-gradient-hero text-white"
                     disabled={isSubmitting || !canReport}
                   >
-                    {isSubmitting ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        Submitting Report...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Submit Issue Report
-                      </>
-                    )}
+                    {isSubmitting ? "Submitting..." : <><Send className="w-4 h-4 mr-2" /> Submit Issue Report</>}
                   </Button>
                 </form>
               </CardContent>
@@ -288,37 +437,29 @@ const ReportIssue = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* AI Analysis Info */}
+            {/* AI Analysis */}
             <Card className="bg-gradient-card border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg">AI-Powered Prioritization</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">AI-Powered Prioritization</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2" />
                   <div>
                     <p className="text-sm font-medium">Smart Analysis</p>
-                    <p className="text-xs text-muted-foreground">
-                      Our NLP system analyzes your report for urgency indicators
-                    </p>
+                    <p className="text-xs text-muted-foreground">Our NLP system analyzes your report for urgency indicators</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2" />
                   <div>
                     <p className="text-sm font-medium">Auto-Categorization</p>
-                    <p className="text-xs text-muted-foreground">
-                      Issues are automatically tagged and routed to appropriate departments
-                    </p>
+                    <p className="text-xs text-muted-foreground">Issues are automatically tagged and routed to appropriate departments</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-primary rounded-full mt-2" />
                   <div>
                     <p className="text-sm font-medium">Real-time Updates</p>
-                    <p className="text-xs text-muted-foreground">
-                      Track your report status through our dashboard
-                    </p>
+                    <p className="text-xs text-muted-foreground">Track your report status through our dashboard</p>
                   </div>
                 </div>
               </CardContent>
@@ -326,9 +467,7 @@ const ReportIssue = () => {
 
             {/* Guidelines */}
             <Card className="bg-gradient-card border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg">Reporting Guidelines</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">Reporting Guidelines</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="space-y-2">
                   <p className="font-medium text-success">✓ Good Reports Include:</p>
@@ -339,31 +478,26 @@ const ReportIssue = () => {
                     <li>• When you first noticed the issue</li>
                   </ul>
                 </div>
-                
                 <div className="space-y-2">
                   <p className="font-medium text-warning">⚠ Emergency Situations:</p>
-                  <p className="text-xs text-muted-foreground">
-                    For immediate emergencies, call 911. This system is for non-emergency civic issues.
-                  </p>
+                  <p className="text-xs text-muted-foreground">For immediate emergencies, call 911. This system is for non-emergency civic issues.</p>
                 </div>
               </CardContent>
             </Card>
 
             {/* Stats */}
             <Card className="bg-gradient-card border-border/50">
-              <CardHeader>
-                <CardTitle className="text-lg">Community Impact</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-center">
+              <CardHeader><CardTitle className="text-lg">Community Impact</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-center">
+                <div>
                   <div className="text-2xl font-bold text-primary">1,247</div>
                   <div className="text-xs text-muted-foreground">Issues reported this month</div>
                 </div>
-                <div className="text-center">
+                <div>
                   <div className="text-2xl font-bold text-success">892</div>
                   <div className="text-xs text-muted-foreground">Issues resolved</div>
                 </div>
-                <div className="text-center">
+                <div>
                   <div className="text-2xl font-bold text-accent">4.2hrs</div>
                   <div className="text-xs text-muted-foreground">Average response time</div>
                 </div>
