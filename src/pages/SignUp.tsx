@@ -23,14 +23,6 @@ const SignUp = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        navigate("/profile");
-      }
-    })();
-  }, [navigate]);
   const { toast } = useToast();
 
   const handleSignUp = async (e: React.FormEvent) => {

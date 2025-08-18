@@ -108,7 +108,7 @@ export default function ProfileComplete() {
               <Label htmlFor="role">Role</Label>
               <select
                 id="role"
-                className="border rounded p-2 w-full"
+                className="border rounded p-2 w-full bg-black text-white appearance-none"
                 value={role}
                 onChange={(e) => setRole(e.target.value as any)}
               >
