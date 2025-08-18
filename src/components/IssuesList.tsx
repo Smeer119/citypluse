@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import StatusBadge from "./StatusBadge";
 import { MapPin, Clock, User } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Issue {
   id: number;
@@ -23,6 +25,18 @@ interface IssuesListProps {
 }
 
 const IssuesList = ({ issues, onIssueClick, onMapHighlight, selectedIssueId }: IssuesListProps) => {
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    const loadRole = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) return;
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+      setIsAdmin(profile?.role === "admin");
+    };
+    loadRole();
+  }, []);
+
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -102,16 +116,18 @@ const IssuesList = ({ issues, onIssueClick, onMapHighlight, selectedIssueId }: I
               >
                 View Details
               </Button>
-              <Button 
-                size="sm" 
-                className="bg-primary hover:bg-primary/90 text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // TODO: Add admin action logic
-                }}
-              >
-                Take Action
-              </Button>
+              {isAdmin && (
+                <Button 
+                  size="sm" 
+                  className="bg-primary hover:bg-primary/90 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // TODO: Add admin action logic
+                  }}
+                >
+                  Take Action
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

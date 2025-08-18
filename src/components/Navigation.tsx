@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { Home, BarChart3, FileText, TrendingUp, AlertTriangle, LogIn, UserPlus } from "lucide-react";
+import { Home, BarChart3, FileText, TrendingUp, AlertTriangle, LogIn, UserPlus, User } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import { useEffect, useState } from "react";
 
 const Navigation = () => {
   const location = useLocation();
@@ -11,6 +13,24 @@ const Navigation = () => {
     { icon: FileText, label: "Report Issue", path: "/report" },
     { icon: TrendingUp, label: "Analytics", path: "/analytics" },
   ];
+
+  const [isAuthed, setIsAuthed] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setIsAuthed(!!data.session);
+    };
+    init();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthed(!!session);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <nav className="bg-background/95 backdrop-blur-md border-b border-border sticky top-0 z-50">
@@ -52,28 +72,44 @@ const Navigation = () => {
             })}
             
             <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-border">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center space-x-2 transition-all duration-300 hover:bg-secondary"
-                asChild
-              >
-                <Link to="/signin">
-                  <LogIn className="w-4 h-4" />
-                  <span className="hidden sm:inline">Sign In</span>
-                </Link>
-              </Button>
-              
-              <Button
-                size="sm"
-                className="flex items-center space-x-2 bg-gradient-hero hover:shadow-glow transition-all duration-300"
-                asChild
-              >
-                <Link to="/signup">
-                  <UserPlus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Sign Up</span>
-                </Link>
-              </Button>
+              {!isAuthed ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-2 transition-all duration-300 hover:bg-secondary"
+                    asChild
+                  >
+                    <Link to="/signin">
+                      <LogIn className="w-4 h-4" />
+                      <span className="hidden sm:inline">Sign In</span>
+                    </Link>
+                  </Button>
+                  
+                  <Button
+                    size="sm"
+                    className="flex items-center space-x-2 bg-gradient-hero hover:shadow-glow transition-all duration-300"
+                    asChild
+                  >
+                    <Link to="/signup">
+                      <UserPlus className="w-4 h-4" />
+                      <span className="hidden sm:inline">Sign Up</span>
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  asChild
+                >
+                  <Link to="/profile">
+                    <User className="w-4 h-4" />
+                    <span className="hidden sm:inline">Account</span>
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>

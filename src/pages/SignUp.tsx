@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,14 @@ const SignUp = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate("/profile");
+      }
+    })();
+  }, [navigate]);
   const { toast } = useToast();
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -50,26 +58,25 @@ const SignUp = () => {
 
     try {
       // 1️⃣ Sign up user in Supabase Auth
+      const redirect = `${window.location.origin}/dashboard`;
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: "http://localhost:8080/dashboard", // ← Must match Supabase config
+          // Use current origin to avoid port mismatches during local dev
+          emailRedirectTo: redirect, // ← Must be allowed in Supabase Auth settings
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error("Supabase signUp error", { authError });
+        throw new Error(
+          `Auth signup failed: ${authError.message || "Unknown"} (status=${(authError as any).status || "?"}, code=${(authError as any).code || "?"}).\n` +
+          `Ensure Supabase Auth > URL Configuration includes Allowed Redirect URL: ${redirect}. If email confirmations are enabled, configure mailer or disable confirmations temporarily for local dev.`
+        );
+      }
 
-      // // 2️⃣ Add user profile to `profiles` table
-      // const { error: profileError } = await supabase.from("profiles").insert([
-      //   {
-      //     id: authData.user?.id,
-      //     name: name, // <-- from your new input
-      //     role: "citizen",
-      //   },
-      // ]);
-
-      // if (profileError) throw profileError; // <- keep this line as is
+      // Rely on DB trigger to create initial profile row.
 
       toast({
         title: "Success",
@@ -79,10 +86,12 @@ const SignUp = () => {
 
       navigate("/signin");
     } catch (error: any) {
+      console.error("SignUp flow error", error);
+      const message =
+        error?.message || error?.toString?.() || "Failed to create account. Please try again.";
       toast({
-        title: "Error",
-        description:
-          error.message || "Failed to create account. Please try again.",
+        title: "Sign up failed",
+        description: message,
         variant: "destructive",
       });
     } finally {

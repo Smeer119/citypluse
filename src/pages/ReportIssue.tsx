@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Navigation from "@/components/Navigation";
 import { FileText, MapPin, Camera, Send, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
+import { Link, useNavigate } from "react-router-dom";
 
 const ReportIssue = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [loadingRole, setLoadingRole] = useState(true);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -20,6 +25,24 @@ const ReportIssue = () => {
     priority: "",
     contactInfo: "",
   });
+
+  const canReport = role === "user"; // Only 'user' can report
+
+  useEffect(() => {
+    const loadRole = async () => {
+      setLoadingRole(true);
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) {
+        navigate("/signin");
+        return;
+      }
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+      setRole(profile?.role || "user");
+      setLoadingRole(false);
+    };
+    loadRole();
+  }, [navigate]);
 
   const categories = [
     "Infrastructure",
@@ -39,35 +62,62 @@ const ReportIssue = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    // Simulate form submission - in real app this would go to Supabase
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+    if (!canReport) {
       toast({
-        title: "Issue Reported Successfully!",
-        description: "Your report has been submitted and will be reviewed by our team. Reference ID: #CityPulse-" + Math.random().toString(36).substr(2, 9),
-      });
-
-      // Reset form
-      setFormData({
-        title: "",
-        description: "",
-        category: "",
-        location: "",
-        priority: "",
-        contactInfo: "",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to submit your report. Please try again.",
+        title: "Admins cannot report issues",
+        description: "Switch to a user account to submit reports.",
         variant: "destructive",
       });
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error("Not authenticated");
+
+      // optional: fetch reporter name
+      const { data: profile } = await supabase.from("profiles").select("name").eq("id", uid).maybeSingle();
+
+      const payload: any = {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category || null,
+        location_text: formData.location,
+        priority: formData.priority || null,
+        contact_info: formData.contactInfo || null,
+        reporter_id: uid,
+        reporter_name: profile?.name || null,
+        status: "open",
+      };
+
+      const { error } = await supabase.from("issues").insert(payload);
+      if (error) throw error;
+
+      toast({
+        title: "Issue Reported Successfully!",
+        description: "Your report has been submitted and will be reviewed shortly.",
+      });
+
+      // Reset and go to dashboard
+      setFormData({ title: "", description: "", category: "", location: "", priority: "", contactInfo: "" });
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to submit your report.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (loadingRole) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,6 +150,12 @@ const ReportIssue = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {!canReport && (
+                  <div className="mb-4 p-3 rounded bg-yellow-100 text-yellow-800 text-sm">
+                    Admin accounts cannot submit reports. Please use a user account. Go to
+                    <Link to="/profile" className="underline ml-1">Profile</Link> to review your role.
+                  </div>
+                )}
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Title */}
                   <div className="space-y-2">
@@ -111,6 +167,7 @@ const ReportIssue = () => {
                       onChange={(e) => handleInputChange("title", e.target.value)}
                       required
                       className="transition-all duration-300 focus:shadow-glow"
+                      disabled={!canReport}
                     />
                   </div>
 
@@ -118,7 +175,7 @@ const ReportIssue = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="category">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
+                      <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)} disabled={!canReport}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
@@ -134,7 +191,7 @@ const ReportIssue = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="priority">Perceived Priority</Label>
-                      <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
+                      <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)} disabled={!canReport}>
                         <SelectTrigger>
                           <SelectValue placeholder="How urgent is this?" />
                         </SelectTrigger>
@@ -160,6 +217,7 @@ const ReportIssue = () => {
                         onChange={(e) => handleInputChange("location", e.target.value)}
                         className="pl-10"
                         required
+                        disabled={!canReport}
                       />
                     </div>
                   </div>
@@ -174,6 +232,7 @@ const ReportIssue = () => {
                       onChange={(e) => handleInputChange("description", e.target.value)}
                       className="min-h-32 resize-none"
                       required
+                      disabled={!canReport}
                     />
                   </div>
 
@@ -185,6 +244,7 @@ const ReportIssue = () => {
                       placeholder="Email or phone number for follow-up"
                       value={formData.contactInfo}
                       onChange={(e) => handleInputChange("contactInfo", e.target.value)}
+                      disabled={!canReport}
                     />
                     <p className="text-xs text-muted-foreground">
                       We'll only use this to contact you about your report. You can also report anonymously.
@@ -207,7 +267,7 @@ const ReportIssue = () => {
                     type="submit" 
                     size="lg" 
                     className="w-full bg-gradient-hero hover:opacity-90 text-white shadow-glow"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !canReport}
                   >
                     {isSubmitting ? (
                       <>

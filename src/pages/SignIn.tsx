@@ -42,11 +42,14 @@ const SignIn = () => {
         .from("profiles")
         .select("*")
         .eq("id", data.user?.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
 
-      if (profile.role === "admin") {
+      // If no profile or not completed, force completion flow
+      if (!profile || profile.is_complete !== true) {
+        navigate("/profile-complete");
+      } else if (profile.role === "admin") {
         navigate("/admin");
       } else {
         navigate("/dashboard");

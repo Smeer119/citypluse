@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
 import StatsCard from "@/components/StatsCard";
@@ -10,7 +10,6 @@ import MobileFilterDrawer from "@/components/MobileFilterDrawer";
 import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu } from "lucide-react";
 
 import { supabase } from "@/lib/supabaseClient"; // Make sure this points to your supabase client
-import { useEffect } from "react"; // If not already imported
 
 const Dashboard = () => {
   const [selectedIssue, setSelectedIssue] = useState<any>(null);
@@ -26,53 +25,37 @@ const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"list" | "map">("list"); // Mobile view toggle
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Mock data for demo - in real app this would come from Supabase
-  const issues = [
-    {
-      id: 1,
-      title: "Major pothole causing traffic delays",
-      category: "Infrastructure",
-      status: "urgent" as const,
-      location: "Main St & 5th Ave",
-      description: "Large pothole is causing significant traffic backup during rush hour",
-      urgencyScore: 95,
-      createdAt: "2024-01-15T10:30:00Z",
-      reportedBy: "Anonymous",
-    },
-    {
-      id: 2,
-      title: "Broken streetlight creating safety concern",
-      category: "Utilities",
-      status: "high" as const,
-      location: "Park Avenue",
-      description: "Streetlight has been out for 3 days, creating unsafe walking conditions",
-      urgencyScore: 78,
-      createdAt: "2024-01-15T08:15:00Z",
-      reportedBy: "Jane Smith",
-    },
-    {
-      id: 3,
-      title: "Noise complaint from construction site",
-      category: "Public Safety",
-      status: "medium" as const,
-      location: "Residential District",
-      description: "Construction noise exceeding permitted hours",
-      urgencyScore: 52,
-      createdAt: "2024-01-15T07:45:00Z",
-      reportedBy: "John Doe",
-    },
-    {
-      id: 4,
-      title: "Graffiti on public building",
-      category: "Vandalism",
-      status: "low" as const,
-      location: "City Hall",
-      description: "Graffiti found on the side wall of city hall building",
-      urgencyScore: 25,
-      createdAt: "2024-01-14T16:20:00Z",
-      reportedBy: "City Worker",
-    },
-  ];
+  const [issues, setIssues] = useState<any[]>([]);
+  const [loadingIssues, setLoadingIssues] = useState(true);
+
+  useEffect(() => {
+    const loadIssues = async () => {
+      setLoadingIssues(true);
+      const { data, error } = await supabase
+        .from("issues")
+        .select("id, title, description, category, location_text, priority, status, created_at, reporter_name")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error("Failed to load issues", error);
+        setIssues([]);
+      } else {
+        const mapped = (data || []).map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          category: row.category || "Other",
+          status: (row.priority || "low") as "urgent" | "high" | "medium" | "low",
+          location: row.location_text || "",
+          description: row.description || "",
+          urgencyScore: row.priority === "urgent" ? 90 : row.priority === "high" ? 75 : row.priority === "medium" ? 50 : 25,
+          createdAt: row.created_at,
+          reportedBy: row.reporter_name || "Anonymous",
+        }));
+        setIssues(mapped);
+      }
+      setLoadingIssues(false);
+    };
+    loadIssues();
+  }, []);
 
   const filteredIssues = issues.filter((issue) => {
     const searchMatch = filters.search === "" || 
@@ -189,7 +172,7 @@ const Dashboard = () => {
             <div className="h-full overflow-hidden flex flex-col">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-foreground">
-                  Issues ({filteredIssues.length})
+                  {loadingIssues ? "Loading Issues..." : `Issues (${filteredIssues.length})`}
                 </h2>
                 <Button variant="outline" size="sm">
                   Export
