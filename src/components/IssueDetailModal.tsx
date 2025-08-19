@@ -1,12 +1,31 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import StatusBadge from "./StatusBadge";
-import { MapPin, User, Calendar, Clock, CheckCircle2, AlertCircle, Settings } from "lucide-react";
+import {
+  MapPin,
+  User,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Settings,
+} from "lucide-react";
 
 interface Issue {
   id: number;
@@ -19,6 +38,7 @@ interface Issue {
   createdAt: string;
   reportedBy: string;
   coinsEarned?: number;
+  photo_url?: string;
 }
 
 interface IssueDetailModalProps {
@@ -28,7 +48,12 @@ interface IssueDetailModalProps {
   isAdmin?: boolean;
 }
 
-const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDetailModalProps) => {
+const IssueDetailModal = ({
+  issue,
+  isOpen,
+  onClose,
+  isAdmin = false,
+}: IssueDetailModalProps) => {
   const [newStatus, setNewStatus] = useState<string>("");
   const [resolutionNotes, setResolutionNotes] = useState("");
 
@@ -36,15 +61,40 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
 
   const handleStatusUpdate = () => {
     // TODO: Connect to Supabase for status updates
-    console.log("Updating status to:", newStatus, "with notes:", resolutionNotes);
+    console.log(
+      "Updating status to:",
+      newStatus,
+      "with notes:",
+      resolutionNotes
+    );
     onClose();
   };
 
   const progressSteps = [
-    { status: "reported", label: "Reported", icon: AlertCircle, completed: true },
-    { status: "accepted", label: "Accepted", icon: CheckCircle2, completed: issue.status !== "urgent" },
-    { status: "in-progress", label: "In Progress", icon: Clock, completed: issue.status === "low" },
-    { status: "completed", label: "Completed", icon: CheckCircle2, completed: false },
+    {
+      status: "reported",
+      label: "Reported",
+      icon: AlertCircle,
+      completed: true,
+    },
+    {
+      status: "accepted",
+      label: "Accepted",
+      icon: CheckCircle2,
+      completed: issue.status !== "urgent",
+    },
+    {
+      status: "in-progress",
+      label: "In Progress",
+      icon: Clock,
+      completed: issue.status === "low",
+    },
+    {
+      status: "completed",
+      label: "Completed",
+      icon: CheckCircle2,
+      completed: false,
+    },
   ];
 
   return (
@@ -69,7 +119,7 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
                     Score: {issue.urgencyScore}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center text-sm text-muted-foreground space-x-4">
                   <span className="flex items-center">
                     <MapPin className="w-4 h-4 mr-1" />
@@ -99,8 +149,12 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
             {/* Description */}
             <Card className="bg-background/50 border-border/30">
               <CardContent className="p-4">
-                <h3 className="font-semibold text-foreground mb-2">Description</h3>
-                <p className="text-muted-foreground leading-relaxed">{issue.description}</p>
+                <h3 className="font-semibold text-foreground mb-2">
+                  Description
+                </h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  {issue.description}
+                </p>
               </CardContent>
             </Card>
 
@@ -124,21 +178,32 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
             {/* Progress Timeline */}
             <Card className="bg-background/50 border-border/30">
               <CardContent className="p-4">
-                <h3 className="font-semibold text-foreground mb-4">Progress Timeline</h3>
+                <h3 className="font-semibold text-foreground mb-4">
+                  Progress Timeline
+                </h3>
                 <div className="space-y-4">
                   {progressSteps.map((step, index) => (
-                    <div key={step.status} className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        step.completed 
-                          ? "bg-success text-success-foreground" 
-                          : "bg-muted text-muted-foreground"
-                      }`}>
+                    <div
+                      key={step.status}
+                      className="flex items-center space-x-3"
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          step.completed
+                            ? "bg-success text-success-foreground"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
                         <step.icon className="w-4 h-4" />
                       </div>
                       <div className="flex-1">
-                        <div className={`font-medium ${
-                          step.completed ? "text-success" : "text-muted-foreground"
-                        }`}>
+                        <div
+                          className={`font-medium ${
+                            step.completed
+                              ? "text-success"
+                              : "text-muted-foreground"
+                          }`}
+                        >
                           {step.label}
                         </div>
                       </div>
@@ -156,7 +221,7 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
                     <Settings className="w-4 h-4 mr-2" />
                     Admin Controls
                   </h3>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label className="text-sm font-medium text-foreground mb-2 block">
@@ -168,8 +233,12 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="accepted">Accept Issue</SelectItem>
-                          <SelectItem value="in-progress">Mark In Progress</SelectItem>
-                          <SelectItem value="completed">Mark Completed</SelectItem>
+                          <SelectItem value="in-progress">
+                            Mark In Progress
+                          </SelectItem>
+                          <SelectItem value="completed">
+                            Mark Completed
+                          </SelectItem>
                           <SelectItem value="rejected">Reject Issue</SelectItem>
                         </SelectContent>
                       </Select>
@@ -188,16 +257,14 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
                     </div>
 
                     <div className="flex space-x-2">
-                      <Button 
+                      <Button
                         onClick={handleStatusUpdate}
                         className="bg-primary hover:bg-primary/90"
                         disabled={!newStatus}
                       >
                         Update Status
                       </Button>
-                      <Button variant="outline">
-                        Assign Team
-                      </Button>
+                      <Button variant="outline">Assign Team</Button>
                     </div>
                   </div>
                 </CardContent>
@@ -208,7 +275,9 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
             {!isAdmin && (
               <Card className="bg-background/50 border-border/30">
                 <CardContent className="p-4">
-                  <h3 className="font-semibold text-foreground mb-4">Actions</h3>
+                  <h3 className="font-semibold text-foreground mb-4">
+                    Actions
+                  </h3>
                   <div className="space-y-3">
                     <Button variant="outline" className="w-full">
                       Follow Updates
@@ -216,7 +285,10 @@ const IssueDetailModal = ({ issue, isOpen, onClose, isAdmin = false }: IssueDeta
                     <Button variant="outline" className="w-full">
                       Share Issue
                     </Button>
-                    <Button variant="ghost" className="w-full text-muted-foreground">
+                    <Button
+                      variant="ghost"
+                      className="w-full text-muted-foreground"
+                    >
                       Report Incorrect Info
                     </Button>
                   </div>

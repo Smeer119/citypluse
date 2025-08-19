@@ -1,30 +1,20 @@
+// src/pages/Dashboard.tsx
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
-import StatsCard from "@/components/StatsCard";
-import IssueDetailModal from "@/components/IssueDetailModal";
 import FilterSidebar from "@/components/FilterSidebar";
 import IssuesList from "@/components/IssuesList";
 import MapView from "@/components/MapView";
 import MobileFilterDrawer from "@/components/MobileFilterDrawer";
-import {
-  AlertTriangle,
-  TrendingUp,
-  Users,
-  Clock,
-  Map,
-  List,
-  Menu,
-} from "lucide-react";
-
-import { supabase } from "@/lib/supabaseClient"; // Make sure this points to your supabase client
+import IssueDetailModal from "@/components/IssueDetailModal";
+import { Map, List, Menu } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import * as XLSX from "xlsx";
 
 const Dashboard = () => {
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [highlightedIssueId, setHighlightedIssueId] = useState<number | null>(
-    null
-  );
+  const [issues, setIssues] = useState<any[]>([]);
+  const [loadingIssues, setLoadingIssues] = useState(true);
+
   const [filters, setFilters] = useState({
     search: "",
     category: "all",
@@ -32,21 +22,25 @@ const Dashboard = () => {
     location: "all",
     dateRange: "all",
   });
-  const [viewMode, setViewMode] = useState<"list" | "map">("list"); // Mobile view toggle
+
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const [issues, setIssues] = useState<any[]>([]);
-  const [loadingIssues, setLoadingIssues] = useState(true);
+  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [highlightedIssueId, setHighlightedIssueId] = useState<number | null>(null);
 
+  // Load issues from Supabase
   useEffect(() => {
     const loadIssues = async () => {
       setLoadingIssues(true);
       const { data, error } = await supabase
         .from("issues")
         .select(
-          "id, title, description, category, location_text, priority, status, created_at, reporter_name"
+          "id, title, description, category, location_text, priority, status, created_at, reporter_name, latitude, longitude"
         )
         .order("created_at", { ascending: false });
+
       if (error) {
         console.error("Failed to load issues", error);
         setIssues([]);
@@ -55,11 +49,7 @@ const Dashboard = () => {
           id: row.id,
           title: row.title,
           category: row.category || "Other",
-          status: (row.priority || "low") as
-            | "urgent"
-            | "high"
-            | "medium"
-            | "low",
+          status: (row.priority || "low") as "urgent" | "high" | "medium" | "low",
           location: row.location_text || "",
           description: row.description || "",
           urgencyScore:
@@ -72,6 +62,10 @@ const Dashboard = () => {
               : 25,
           createdAt: row.created_at,
           reportedBy: row.reporter_name || "Anonymous",
+          coordinates:
+            row.latitude && row.longitude
+              ? { lat: row.latitude, lng: row.longitude }
+              : undefined,
         }));
         setIssues(mapped);
       }
@@ -80,16 +74,17 @@ const Dashboard = () => {
     loadIssues();
   }, []);
 
+  // Filter issues
   const filteredIssues = issues.filter((issue) => {
     const searchMatch =
       filters.search === "" ||
       issue.title.toLowerCase().includes(filters.search.toLowerCase()) ||
       issue.description.toLowerCase().includes(filters.search.toLowerCase()) ||
       issue.location.toLowerCase().includes(filters.search.toLowerCase());
+
     const categoryMatch =
       filters.category === "all" || issue.category === filters.category;
-    const statusMatch =
-      filters.status === "all" || issue.status === filters.status;
+    const statusMatch = filters.status === "all" || issue.status === filters.status;
     const locationMatch =
       filters.location === "all" || issue.location.includes(filters.location);
 
@@ -99,10 +94,7 @@ const Dashboard = () => {
   const handleIssueClick = (issue: any) => {
     setSelectedIssue(issue);
     setIsDetailModalOpen(true);
-  };
-
-  const handleMapHighlight = (issueId: number) => {
-    setHighlightedIssueId(issueId);
+    setHighlightedIssueId(issue.id); // highlight on map
   };
 
   const handleFilterChange = (newFilters: any) => {
@@ -113,128 +105,116 @@ const Dashboard = () => {
     (value) => value !== "all" && value !== ""
   ).length;
 
+  // Export to Excel
+  const handleExport = () => {
+    if (!filteredIssues.length) {
+      alert("No issues to export");
+      return;
+    }
+
+    const data = filteredIssues.map((issue) => ({
+      ID: issue.id,
+      Title: issue.title,
+      Category: issue.category,
+      Status: issue.status,
+      Location: issue.location,
+      Description: issue.description,
+      "Urgency Score": issue.urgencyScore,
+      "Created At": issue.createdAt,
+      "Reported By": issue.reportedBy,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    const colWidths = Object.keys(data[0]).map((key) => ({
+      wch: Math.max(
+        key.length,
+        ...data.map((row) => (row[key] ? row[key].toString().length : 0))
+      ) + 2,
+    }));
+    worksheet["!cols"] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Issues");
+
+    XLSX.writeFile(workbook, "issues_export.xlsx");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
 
       <div className="container mx-auto px-4 py-6">
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">
-                Civic Issues Dashboard
-              </h1>
-              <p className="text-muted-foreground">
-                Real-time monitoring and intelligent prioritization of city
-                issues
-              </p>
-            </div>
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Civic Issues Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Real-time monitoring and intelligent prioritization of city issues
+            </p>
+          </div>
 
-            {/* Mobile Controls */}
-            <div className="flex items-center space-x-2 sm:hidden">
-              <MobileFilterDrawer
-                onFilterChange={handleFilterChange}
-                activeFilterCount={activeFilterCount}
-              />
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setViewMode(viewMode === "list" ? "map" : "list")
-                }
-              >
-                {viewMode === "list" ? (
-                  <Map className="w-4 h-4 mr-2" />
-                ) : (
-                  <List className="w-4 h-4 mr-2" />
-                )}
-                {viewMode === "list" ? "Map" : "List"}
-              </Button>
-            </div>
+          {/* Mobile Controls */}
+          <div className="flex items-center space-x-2 sm:hidden">
+            <MobileFilterDrawer
+              onFilterChange={handleFilterChange}
+              activeFilterCount={activeFilterCount}
+            />
+            <Button
+              variant="outline"
+              onClick={() => setViewMode(viewMode === "list" ? "map" : "list")}
+            >
+              {viewMode === "list" ? <Map className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
+              {viewMode === "list" ? "Map" : "List"}
+            </Button>
           </div>
         </div>
 
-        {/* Main Content - Desktop Layout */}
+        {/* Desktop Layout */}
         <div className="hidden lg:grid lg:grid-cols-12 gap-6 h-[calc(100vh-280px)]">
-          {/* Left Sidebar - Filters */}
-
-          {/* Left Sidebar - Filters */}
-          <div
-            className={`${
-              sidebarCollapsed ? "lg:col-span-1" : "lg:col-span-3"
-            } transition-all duration-300`}
-          >
-            {/* Desktop Sidebar */}
+          {/* Sidebar */}
+          <div className={`${sidebarCollapsed ? "lg:col-span-1" : "lg:col-span-3"} transition-all duration-300`}>
             {!sidebarCollapsed && (
               <div className="hidden lg:block h-full overflow-y-auto">
                 <FilterSidebar onFilterChange={handleFilterChange} />
               </div>
             )}
 
-            {/* Mobile Sidebar */}
-            <div
-              className={`fixed top-0 left-0 z-50 h-full w-64 bg-background shadow-lg transform transition-transform duration-300 lg:hidden
-    ${sidebarCollapsed ? "-translate-x-full" : "translate-x-0"}`}
-            >
-              <div className="h-full overflow-y-auto p-4">
-                <FilterSidebar onFilterChange={handleFilterChange} />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSidebarCollapsed(true)}
-                  className="mt-4 w-full"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-
-            {/* Mobile toggle button */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setSidebarCollapsed(false)}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="mt-2 w-full lg:hidden"
             >
               <Menu className="w-4 h-4" />
             </Button>
           </div>
 
-          {/* Middle - Issues List */}
-          <div
-            className={`${
-              sidebarCollapsed ? "lg:col-span-5" : "lg:col-span-4"
-            } transition-all duration-300`}
-          >
-            <div className="h-full overflow-hidden flex flex-col">
+          {/* Issues List */}
+          <div className={`${sidebarCollapsed ? "lg:col-span-5" : "lg:col-span-4"} transition-all duration-300`}>
+            <div className="h-full flex flex-col">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-foreground">
-                  {loadingIssues
-                    ? "Loading Issues..."
-                    : `Issues (${filteredIssues.length})`}
+                  {loadingIssues ? "Loading Issues..." : `Issues (${filteredIssues.length})`}
                 </h2>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={handleExport}>
                   Export
                 </Button>
               </div>
-
               <div className="flex-1 overflow-y-auto">
                 <IssuesList
                   issues={filteredIssues}
                   onIssueClick={handleIssueClick}
-                  onMapHighlight={handleMapHighlight}
-                  selectedIssueId={highlightedIssueId}
+                  selectedIssueId={highlightedIssueId} // highlight active card
                 />
               </div>
             </div>
           </div>
 
-          {/* Right - Map */}
-          <div
-            className={`${
-              sidebarCollapsed ? "lg:col-span-6" : "lg:col-span-5"
-            } transition-all duration-300`}
-          >
+          {/* Map */}
+          <div className={`${sidebarCollapsed ? "lg:col-span-6" : "lg:col-span-5"} transition-all duration-300`}>
             <MapView
               issues={filteredIssues}
               onIssueSelect={handleIssueClick}
@@ -251,7 +231,7 @@ const Dashboard = () => {
                 <h2 className="text-xl font-semibold text-foreground">
                   Issues ({filteredIssues.length})
                 </h2>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={handleExport}>
                   Export
                 </Button>
               </div>
@@ -259,7 +239,6 @@ const Dashboard = () => {
               <IssuesList
                 issues={filteredIssues}
                 onIssueClick={handleIssueClick}
-                onMapHighlight={handleMapHighlight}
                 selectedIssueId={highlightedIssueId}
               />
             </div>
@@ -282,7 +261,7 @@ const Dashboard = () => {
             setIsDetailModalOpen(false);
             setSelectedIssue(null);
           }}
-          isAdmin={false} // TODO: Connect to auth system
+          isAdmin={false}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import "leaflet/dist/leaflet.css";
 
 /* CityPulse Design System - Civic Dashboard Theme
 All colors MUST be HSL for consistency.
